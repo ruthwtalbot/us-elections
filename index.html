@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<body>
+	<h1 id="title">US Election Results <span id="titleYear"></span></h1>
+	<div id="controlsContainer">
+		<label for="yearSlider">2000</label>
+		<input type="range" id="yearSlider" name="year"
+         min="2000" max="2016" step="4" onchange="onSliderUpdate(this.value)">
+        <label for="yearSlider">2016</label>
+        <div><button onclick="onButtonPress()">Animate</button></div>
+	</div>
+</body>
+<style>
+	#controlsContainer {
+		position: absolute;
+		bottom: 150px;
+		right: 10px;
+	}
+</style>
+<script src="//d3js.org/d3.v5.min.js" charset="utf-8"></script>
+<script>
+
+var svg;
+var years;
+var width = 1200,
+	height = 800;
+
+/*
+ * Initial function for loading map.
+ */
+(function run() {
+	// Create svg
+	svg = d3.select("body").append("svg")
+		.attr("width", width)
+		.attr("height", height);
+
+	const files = ['alluscounties2000.json', 'alluscounties2004.json', 
+		'alluscounties2008.json', 'alluscounties2012.json', 'alluscounties2016.json'];
+	const promises = [];
+
+	files.forEach(function (file) {
+		promises.push(d3.json(file))
+	});
+
+	// Fetch all files, then call display logic.
+	Promise.all(promises).then(function (elections) {
+		years = elections;
+		displayJson(elections);
+	});
+})();
+
+/* 
+ * Updates data to new slider year selection.
+ * @param {number} sliderValue Current slider value.
+ */
+function onSliderUpdate(sliderValue) {
+	const index = (sliderValue - 2000) / 4;
+	document.getElementById("titleYear").innerHTML = sliderValue;
+	update(years[index].features, 0);
+}
+
+/* 
+ * Triggers animation across years on button press.
+ */
+function onButtonPress() {
+	// Display the data for each election year.
+	const titleYear = document.getElementById("titleYear").innerHTML = '2000 - 2016';
+	for (let i = 0; i < years.length; i++) {
+		update(years[i].features, i);
+	}
+}
+
+/*
+ * Loads map and initializes elements on json load.
+ * @param {Array<>} elections The election data
+ */
+function displayJson(elections) {
+	// Create projection
+	const projection = d3.geoAlbers();
+	const path = d3.geoPath(projection);
+
+	// Initialize map with 2000 data.
+	svg.selectAll("path")
+		.data(elections[0].features)
+		.enter().append("path")
+		.attr("fill", function (d) {
+			return getFill(d);
+		})
+		.attr("d", path);
+
+	// Initialize slider and display now that json has loaded
+	document.getElementById("yearSlider").value = 2000;
+}
+
+/* 
+ * Updates map with new data. Sets the delay based on
+ * data's order. 
+ */
+function update(data, increment) {
+	const update = svg
+		.selectAll("path")
+		.data(data);
+
+	// Update data with transition and styling.
+	update.enter()
+		.append("path")
+		.merge(update)
+		.transition()
+		.delay((d, i) => {
+			return 1000 * increment;
+		})
+		.duration(1000 * increment)
+		.attr("fill", function (d) {
+			return getFill(d);
+		})
+
+	update.exit().remove();
+}
+
+/* 
+ * Get the fill attribute for a county.
+ */
+function getFill(d) {
+	let total = parseInt(d.properties['joincsv.of']);
+	const dem = parseInt(d.properties['joincsv.pa']);
+	const green = parseInt(d.properties['joincsv.to']);
+	const other = parseInt(d.properties['joincsv._2']);
+	// Remove green and other voters from total.
+	if (!isNaN(green)) {
+		total = total - green;
+	}
+	if (!isNaN(other)) {
+		total = total - other;
+	}
+	
+	// Normalize the percentages to make colors clearer.
+	percent = dem / total * 100;
+	normVal = ((percent - 4) / 91);
+	return rgb_col_perc(normVal, 240, 0);
+}
+
+/* 
+ * Creates an RGB string based on the percent. 
+ * The higher the percent, the redder the string.
+ */
+function rgb_col_perc(percent) {
+	if (isNaN(percent)) {
+		return 'rgb(230,0,20)'; //220
+	}
+	
+	const red = 255 * percent;
+	const blue = 255 - red;
+
+	// Return a CSS RGB string
+	return 'rgb(' + red + ', 0,' + blue + ')';
+}
+</script>
